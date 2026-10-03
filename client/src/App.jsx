@@ -8,6 +8,7 @@ import {
 const emptyWorker = () => ({ workerNumber: "", workerName: "", product: "", quantity: "", date: localDate(), comments: "" });
 const legacyWorkersKey = "production_workers_v1";
 const legacySummariesKey = "daily_summaries_v1";
+const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL || "").replace(/\/+$/, "");
 
 function localDate() {
   const date = new Date();
@@ -16,11 +17,22 @@ function localDate() {
 }
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...options.headers }
+    credentials: "include",
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...options.headers
+    }
   });
   if (response.status === 204) return null;
+  const contentType = response.headers.get("content-type") || "";
+  if (!/\bapplication\/(?:[\w.-]+\+)?json\b/i.test(contentType)) {
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("يلزم تسجيل الدخول إلى Cloudflare Access للوصول إلى خدمة البيانات.");
+    }
+    throw new Error(`استجابة غير صالحة من خدمة البيانات (${response.status}). تحقق من رابط API وإعدادات النشر.`);
+  }
   const result = await response.json();
   if (!response.ok) throw new Error(result.error || "تعذر إكمال الطلب.");
   return result;

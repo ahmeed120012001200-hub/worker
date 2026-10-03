@@ -2,6 +2,10 @@ import express from "express";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  getCloudflareAccessIssuer,
+  verifyCloudflareAccessJwt
+} from "./cloudflareAccess.js";
 import { createContextClient, verifyAuth } from "@supabase/server/core";
 import {
   addProduct,
@@ -18,10 +22,65 @@ import {
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;
+const isProduction = process.env.NODE_ENV === "production";
+const accessIssuer = process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN
+  ? getCloudflareAccessIssuer(process.env.CLOUDFLARE_ACCESS_TEAM_DOMAIN)
+  : null;
+const accessAudience = process.env.CLOUDFLARE_ACCESS_AUD;
+const allowedOrigins = new Set(
+  (process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .map((origin) => {
+      const url = new URL(origin);
+      if (url.pathname !== "/" || url.search || url.hash) {
+        throw new Error("CORS_ALLOWED_ORIGINS must contain origins only, without paths.");
+      }
+      return url.origin;
+    })
+);
 const rootDirectory = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const clientBuild = resolve(rootDirectory, "dist", "client");
 
+if (isProduction && (!accessIssuer || !accessAudience || !allowedOrigins.size)) {
+  throw new Error("Production requires CLOUDFLARE_ACCESS_TEAM_DOMAIN, CLOUDFLARE_ACCESS_AUD, and CORS_ALLOWED_ORIGINS.");
+}
+
 app.use(express.json({ limit: "10mb" }));
+
+app.use("/api", (request, response, next) => {
+  const origin = request.get("origin");
+  if (!origin) return next();
+  response.setHeader("Vary", "Origin");
+  if (!allowedOrigins.has(origin)) {
+    return response.status(403).json({ error: "هذا المصدر غير مسموح به." });
+  }
+
+  response.setHeader("Access-Control-Allow-Origin", origin);
+  response.setHeader("Access-Control-Allow-Credentials", "true");
+  response.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type,Authorization");
+  if (request.method === "OPTIONS") return response.sendStatus(204);
+  return next();
+});
+
+app.use("/api", async (request, response, next) => {
+  if (!isProduction || request.path === "/health") return next();
+
+  const token = request.get("Cf-Access-Jwt-Assertion");
+  if (!token) return response.status(401).json({ error: "يلزم تسجيل الدخول عبر Cloudflare Access." });
+
+  try {
+    if (!await verifyCloudflareAccessJwt(token, { issuer: accessIssuer, audience: accessAudience })) {
+      return response.status(401).json({ error: "رمز Cloudflare Access غير صالح." });
+    }
+    return next();
+  } catch (error) {
+    console.error("Cloudflare Access verification failed:", error.message);
+    return response.status(503).json({ error: "تعذر التحقق من جلسة Cloudflare Access." });
+  }
+});
 
 function sendApiError(response, error) {
   const status = error.status || 500;
@@ -152,4 +211,4 @@ if (existsSync(clientBuild)) {
   app.get("*path", (_request, response) => response.sendFile(resolve(clientBuild, "index.html")));
 }
 
-app.listen(port, "127.0.0.1", () => console.log(`API ready at http://localhost:${port}`));
+app.listen(port, "0.0.0.0", () => console.log(`API ready on port ${port}`));
