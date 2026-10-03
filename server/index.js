@@ -8,6 +8,11 @@ import {
 } from "./cloudflareAccess.js";
 import { createContextClient, verifyAuth } from "@supabase/server/core";
 import {
+  createSupabaseEnv,
+  createSupabaseRepository
+} from "./supabaseRepository.js";
+const supabaseEnv = createSupabaseEnv(process.env);
+const {
   addProduct,
   createWorker,
   deleteDailySummary,
@@ -18,7 +23,7 @@ import {
   readState,
   saveDailySummary,
   updateWorker
-} from "./supabaseRepository.js";
+} = createSupabaseRepository(process.env);
 
 const app = express();
 const port = Number(process.env.PORT) || 3001;

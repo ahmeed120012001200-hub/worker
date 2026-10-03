@@ -1,5 +1,3 @@
-import { createPublicKey, verify as verifySignature } from "node:crypto";
-
 const keySets = new Map();
 
 export function getCloudflareAccessIssuer(teamDomain) {
@@ -43,8 +41,8 @@ export async function verifyCloudflareAccessJwt(token, { issuer, audience }) {
   let header;
   let claims;
   try {
-    header = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
-    claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    header = JSON.parse(decodeBase64Url(parts[0]));
+    claims = JSON.parse(decodeBase64Url(parts[1]));
   } catch {
     return false;
   }
@@ -71,11 +69,27 @@ export async function verifyCloudflareAccessJwt(token, { issuer, audience }) {
   }
   if (!signingKey) return false;
 
-  const publicKey = createPublicKey({ key: signingKey, format: "jwk" });
-  return verifySignature(
-    "RSA-SHA256",
-    Buffer.from(`${parts[0]}.${parts[1]}`),
-    publicKey,
-    Buffer.from(parts[2], "base64url")
+  const publicKey = await crypto.subtle.importKey(
+    "jwk",
+    signingKey,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"]
   );
+  return crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    publicKey,
+    decodeBase64UrlBytes(parts[2]),
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`)
+  );
+}
+
+function decodeBase64Url(value) {
+  return new TextDecoder().decode(decodeBase64UrlBytes(value));
+}
+
+function decodeBase64UrlBytes(value) {
+  const base64 = value.replaceAll("-", "+").replaceAll("_", "/");
+  const binary = atob(base64.padEnd(Math.ceil(base64.length / 4) * 4, "="));
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }

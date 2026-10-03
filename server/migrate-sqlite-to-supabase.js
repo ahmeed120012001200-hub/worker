@@ -1,7 +1,8 @@
 import database from "./database.js";
-import { migrateLegacyState } from "./supabaseRepository.js";
+import { createSupabaseRepository } from "./supabaseRepository.js";
 
 const apply = process.argv.includes("--apply");
+const { migrateLegacyState } = createSupabaseRepository(process.env);
 const workers = database.prepare("SELECT workerNumber, workerName, product, quantity, date, comments, created FROM workers ORDER BY id").all();
 const dailySummaries = database.prepare("SELECT date, items, created FROM daily_summaries ORDER BY date").all().map((summary) => ({
   ...summary,

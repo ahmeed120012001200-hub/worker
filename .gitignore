@@ -5,3 +5,5 @@ data/
 .env.*
 !.env.example
 .vscode/settings.json
+.dev.vars*
+.wrangler/

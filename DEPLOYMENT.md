@@ -1,39 +1,33 @@
-# Cloudflare frontend and Node API deployment
+# Cloudflare Workers deployment
 
-The frontend can be hosted on Cloudflare, but the API must run as a Node.js service. A Cloudflare `workers.dev` static deployment does not run `server/index.js`.
+The Cloudflare Worker serves both the React frontend and the `/api` routes. It connects directly to Supabase; no separate Node hosting service or API base URL is needed.
 
-## 1. Deploy the Node API
+## Configure Worker variables
 
-Use a Node.js 22 service with the repository root as its working directory:
+In `wrangler.json`, replace the `CLOUDFLARE_ACCESS_TEAM_DOMAIN` and `CLOUDFLARE_ACCESS_AUD` placeholders with the team domain and audience tag from a Cloudflare Access self-hosted application protecting this Worker hostname. Keep `CORS_ALLOWED_ORIGINS` empty for a same-origin deployment.
 
-- Build command: `npm ci`
-- Start command: `npm start`
+Add Supabase values as Worker secrets, not in `wrangler.json` or the frontend build:
 
-Configure these environment variables on the API service; never put the Supabase secret key in Cloudflare's frontend build variables:
+```powershell
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_PUBLISHABLE_KEY
+npx wrangler secret put SUPABASE_SECRET_KEY
+npx wrangler secret put SUPABASE_JWKS_URL
+```
 
-- `NODE_ENV=production`
-- `SUPABASE_URL`
-- `SUPABASE_PUBLISHABLE_KEY`
-- `SUPABASE_SECRET_KEY`
-- `SUPABASE_JWKS_URL`
-- `CORS_ALLOWED_ORIGINS=https://your-app.example.com`
-- `CLOUDFLARE_ACCESS_TEAM_DOMAIN=your-team.cloudflareaccess.com`
-- `CLOUDFLARE_ACCESS_AUD=<the API Access application's AUD tag>`
+The Supabase secret key must remain a Worker secret. Configure the Cloudflare Access application with an allow policy for the intended users. The Worker independently checks the `Cf-Access-Jwt-Assertion` signature, issuer, audience, and expiry for every API route except the database health check.
 
-The production API refuses to start if its Access issuer, audience, or allowed frontend origins are missing. Its `/api/health` endpoint is public for health checks; all other API routes require a valid Cloudflare Access JWT.
+## Deploy
 
-## 2. Put both hostnames behind Cloudflare Access
+```powershell
+npm ci
+npm run deploy:worker
+```
 
-Use custom hostnames in a Cloudflare-managed DNS zone for both the frontend and API, and create a Cloudflare Access self-hosted application and allow policy for each hostname. The API request must pass through the API's Access application so Cloudflare adds `Cf-Access-Jwt-Assertion`; the Node service independently verifies its issuer, audience, expiry, and signature. A direct request to the Node provider hostname without that assertion is rejected.
+Wrangler builds the app into `dist/client` and deploys those static assets together with the Worker API using `wrangler.json`. Alternatively, `npm run build` followed by `npx wrangler deploy` performs the same steps.
 
-The frontend's `workers.dev` hostname must not remain a public bypass around the protected custom hostname. Disable the `workers.dev` route after configuring the custom domain. Configure Cloudflare Access to permit CORS preflight `OPTIONS` requests to the API while keeping the actual API routes protected.
+`GET /api/health` checks both Worker configuration and Supabase table connectivity. It returns `{"ok":true,"supabase":"connected"}` when ready; missing credentials or database errors return a JSON error. All data routes require Cloudflare Access.
 
-## 3. Build and deploy the frontend
+For local Worker development, copy the Supabase values into an ignored `.dev.vars` file, use test Access settings or configure an Access-protected test deployment, then run `npm run dev:worker`.
 
-Set this Cloudflare build variable before building:
-
-- `VITE_API_BASE_URL=https://your-api.example.com`
-
-Build command: `npm ci && npm run build`. Publish the generated `dist/client` directory. Set `CORS_ALLOWED_ORIGINS` on the API to the exact frontend origin (scheme and hostname, no path). For separate subdomains, configure the Cloudflare Access cookie domain so the authenticated session is available to the API hostname.
-
-After deployment, verify that `https://your-api.example.com/api/health` returns `{"ok":true}`, and that the protected frontend can load `/api/state`. A JSON/API error is shown in the page if the API hostname or Access configuration is incorrect.
+The existing Express server remains available for local development with `npm run dev`; it is not the production Cloudflare entry point.
