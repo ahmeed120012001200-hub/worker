@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>إضافة عامل إنتاج</title>
+	<link rel="stylesheet" href="style.css">
+</head>
+<body>
+	<!-- header -->
+	<header style="margin-bottom:12px;">
+		<h1 style="margin:0 0 6px 0">نظام تسجيل إنتاج العمال</h1>
+		<p style="margin:0;color:#556; font-size:13px">سهل وسريع — استخدم لوحة المفاتيح أو الأزرار لإدارة السجلات</p>
+	</header>
+
+	<div class="container">
+		<div class="form-area">
+			<h2>الإنتاج</h2>
+			<form id="workerForm" autocomplete="off">
+				<label>رقم العامل
+					<input id="workerNumber" name="workerNumber" type="text" />
+				</label>
+				<label>اسم العامل
+					<input id="workerName" name="workerName" type="text" />
+				</label>
+				<label>المنتج
+					<input id="product" name="product" type="text" />
+				</label>
+				<label>الكمية
+					<input id="quantity" name="quantity" type="number" min="0" />
+				</label>
+				<label>التاريخ
+					<input id="date" name="date" type="date" />
+				</label>
+				<label>تعليق
+					<textarea id="comments" name="comments" rows="3"></textarea>
+				</label>
+			</form>
+		</div>
+
+		<div class="controls">
+			<button id="newRecordBtn" title="أضف سجل جديد كامل">سجل جديد</button>
+			<button id="newBtn" title="فرّغ الحقول">جديد</button>
+			<button id="saveBtn" title="حفظ">حفظ</button>
+			<button id="addNewBtn" title="حفظ كجديد">حفظ كجديد</button>
+			<button id="deleteBtn" title="حذف السجل الحالي">حذف</button>
+			<button id="restoreBtn" title="استعادة آخر حذف">استعادة</button>
+			<button id="prevBtn" title="السجل السابق">السابق</button>
+			<button id="nextBtn" title="السجل التالي">التالي</button>
+			<button id="criteriaBtn" title="بحث">بحث</button>
+			<button id="closeBtn" title="إغلاق">إغلاق</button>
+
+			<!-- Excel import -->
+			<label style="margin-top:8px;">
+				<input id="importFile" type="file" accept=".xls,.xlsx" />
+				<span style="font-size:12px; margin-right:6px;">استيراد من Excel</span>
+			</label>
+
+			<!-- new: export and clear -->
+			<button id="exportBtn" title="تصدير السجلات إلى CSV" style="margin-top:8px;">تصدير CSV</button>
+			<button id="clearBtn" title="مسح كل البيانات المحفوظة" style="background:#ffecec;border-color:#f5c6c6;">مسح البيانات</button>
+
+			<!-- ADD: monthly bonus controls -->
+			<div style="margin-top:10px; display:flex; flex-direction:column; gap:6px;">
+				<label>
+					<span style="font-size:13px; margin-right:6px;">الشهر</span>
+					<input id="summaryMonth" type="month" title="اختر الشهر للملخص" />
+				</label>
+				<label>
+					<span style="font-size:13px; margin-right:6px;">مبلغ مجمع للمكافأة</span>
+					<input id="bonusPool" type="number" min="0" step="0.01" value="0" />
+				</label>
+				<label>
+					<span style="font-size:13px; margin-right:6px;">نسبة زيادة (٪)</span>
+					<input id="bonusPct" type="number" step="0.1" value="0" />
+				</label>
+				<div style="display:flex; gap:8px;">
+					<button id="calcSummaryBtn" title="احسب ملخص الشهر">حساب الملخص</button>
+					<button id="exportSummaryBtn" title="تصدير ملخص الشهر">تصدير ملخص</button>
+				</div>
+			</div>
+
+			<button id="openDailySummaryBtn" title="صفحة ملخص اليوم" style="margin-top:8px;">ملخص اليوم</button>
+		</div>
+	</div>
+
+	<!-- قبل جدول: شريط بحث سريع -->
+	<div style="margin:12px 0 6px 0; display:flex; gap:8px; align-items:center;">
+		<input id="searchInput" placeholder="ابحث برقم/اسم/منتج..." aria-label="بحث" style="flex:1; padding:8px; border-radius:6px; border:1px solid #d0d7de;" />
+		<button id="clearSearch" title="مسح البحث" style="padding:8px 10px;border-radius:6px;border:1px solid #bbb;background:#f2f4f6;">X</button>
+	</div>
+
+	<section class="list-area">
+		<div class="table-wrapper">
+			<table id="recordsTable" class="styled-table" role="table" aria-label="قائمة السجلات">
+				<thead>
+					<tr>
+						<th>الإجراءات</th>
+						<th data-sort="comments" scope="col" aria-sort="none">التعليق <span class="sort-indicator"></span></th>
+						<th data-sort="date" scope="col" aria-sort="none">التاريخ <span class="sort-indicator"></span></th>
+						<th data-sort="quantity" scope="col" aria-sort="none">الكمية <span class="sort-indicator"></span></th>
+						<th data-sort="product" scope="col" aria-sort="none">المنتج <span class="sort-indicator"></span></th>
+						<th data-sort="workerName" scope="col" aria-sort="none">اسم العامل <span class="sort-indicator"></span></th>
+						<th data-sort="workerNumber" scope="col" aria-sort="none">رقم العامل <span class="sort-indicator"></span></th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+
+		<!-- table footer: pagination + page size -->
+		<div class="table-footer" aria-hidden="false">
+			<div class="pagination-controls">
+				<button id="pagePrev" title="الصفحة السابقة">‹</button>
+				<span id="pageInfo" aria-live="polite">0 / 0</span>
+				<button id="pageNext" title="الصفحة التالية">›</button>
+			</div>
+			<div class="page-size">
+				<label for="pageSizeSelect">عرض</label>
+				<select id="pageSizeSelect" aria-label="حجم الصفحة">
+					<option value="10">10</option>
+					<option value="25">25</option>
+					<option value="50">50</option>
+					<option value="100">100</option>
+				</select>
+				<span class="row-count" id="totalCount">إجمالي: 0</span>
+			</div>
+		</div>
+	</section>
+
+	<!-- monthly summary section (new) -->
+	<section id="monthlySummaryArea" style="margin-top:16px;">
+		<h3 style="margin:0 0 8px 0">ملخص الإنتاج الشهري</h3>
+		<div id="monthlySummaryWrap">
+			<!-- rendered by JS -->
+			<table id="monthlySummaryTable" style="width:100%; border-collapse:collapse; display:none;">
+				<thead>
+					<tr>
+						<th style="text-align:right;padding:8px;border-bottom:1px solid #eef2f6">رقم العامل</th>
+						<th style="text-align:right;padding:8px;border-bottom:1px solid #eef2f6">اسم العامل</th>
+						<th style="text-align:right;padding:8px;border-bottom:1px solid #eef2f6">إجمالي الكمية</th>
+						<th style="text-align:right;padding:8px;border-bottom:1px solid #eef2f6">نسبة من الكل</th>
+						<th style="text-align:right;padding:8px;border-bottom:1px solid #eef2f6">المكافأة</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+				<tfoot>
+					<tr>
+						<td colspan="2" style="padding:8px;font-weight:700;text-align:right">الإجمالي</td>
+						<td id="ms_totalQty" style="padding:8px;text-align:right">0</td>
+						<td id="ms_totalPct" style="padding:8px;text-align:right">100%</td>
+						<td id="ms_totalBonus" style="padding:8px;text-align:right">0</td>
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+	</section>
+
+	<!-- keyboard help panel -->
+	<div id="keyboardHelp" class="keyboard-help" hidden aria-hidden="true" role="dialog" aria-labelledby="kbTitle">
+		<h3 id="kbTitle">اختصارات لوحة المفاتيح</h3>
+		<ul>
+			<li><strong>Enter</strong> — حفظ السجل الحالي</li>
+			<li><strong>Ctrl + S</strong> — حفظ</li>
+			<li><strong>Ctrl + N</strong> — إضافة سجل جديد</li>
+			<li><strong>Ctrl + Shift + N</strong> — مسح النموذج (New)</li>
+			<li><strong>Ctrl + Delete</strong> — حذف السجل المحدد</li>
+			<li><strong>Ctrl + R</strong> — استعادة آخر حذف</li>
+			<li><strong>Alt + ↑ / Alt + ↓</strong> — السجل السابق / التالي</li>
+			<li><strong>Home / End</strong> — أول / آخر سجل</li>
+			<li><strong>Ctrl + F</strong> — بحث (Criteria)</li>
+			<li><strong>F1</strong> أو <strong>?</strong> — إظهار/إخفاء هذه المساعدة</li>
+		</ul>
+		<button id="closeHelp" class="help-close">اغلاق</button>
+	</div>
+
+	<!-- إضافة مكتبة SheetJS قبل app.js -->
+	<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+	<script src="app.js"></script>
+</body>
+</html>
